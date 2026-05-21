@@ -621,6 +621,108 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
 .toast.show { transform: translateY(0); opacity: 1; }
 .toast.success { border-color: rgba(16,185,129,0.4); color: #10B981; }
 .toast.error { border-color: rgba(255,77,109,0.4); color: #FF4D6D; }
+
+/* ── Mobile Responsive ── */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+
+  .main {
+    padding-bottom: 70px;
+  }
+
+  .feed {
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .topbar {
+    padding: 10px 14px;
+  }
+
+  .topbar-title {
+    font-size: 15px;
+  }
+
+  .search-wrap {
+    width: 140px;
+    padding: 6px 10px;
+  }
+
+  .upload-topbtn span { display: none; }
+  .upload-topbtn { padding: 8px 10px; }
+
+  .tabs-bar {
+    padding: 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tabs-bar::-webkit-scrollbar { display: none; }
+
+  .tab-btn {
+    padding: 10px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .modal {
+    padding: 20px 16px;
+    border-radius: 12px;
+  }
+
+  .login-card {
+    padding: 32px 24px;
+    border-radius: 16px;
+  }
+
+  /* Bottom navigation bar for mobile */
+  .mobile-nav {
+    display: flex !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-nav {
+    display: none !important;
+  }
+}
+
+.mobile-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-top: 0.5px solid var(--border);
+  display: none;
+  align-items: center;
+  justify-content: space-around;
+  padding: 8px 0 12px;
+  z-index: 50;
+}
+
+.mobile-nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 8px;
+  transition: color 0.15s;
+  font-size: 10px;
+  font-family: var(--font-body);
+}
+
+.mobile-nav-btn i { font-size: 22px; }
+.mobile-nav-btn.active { color: var(--accent); }
+.mobile-nav-btn:hover { color: var(--text); }
 </style>
 </head>
 <body>
@@ -686,6 +788,30 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
 
 <!-- ── App ── -->
 <div id="app" class="hidden">
+
+  <!-- Mobile Bottom Navigation -->
+  <nav class="mobile-nav" id="mobile-nav">
+    <button class="mobile-nav-btn active" onclick="mobileNav(this,'feed')">
+      <i class="ti ti-layout-dashboard"></i>
+      Feed
+    </button>
+    <button class="mobile-nav-btn" onclick="mobileNav(this,'explore')">
+      <i class="ti ti-compass"></i>
+      Explore
+    </button>
+    <button class="mobile-nav-btn" onclick="openUpload()">
+      <i class="ti ti-circle-plus"></i>
+      Post
+    </button>
+    <button class="mobile-nav-btn" onclick="openShorts()">
+      <i class="ti ti-player-play"></i>
+      Shorts
+    </button>
+    <button class="mobile-nav-btn" onclick="mobileNav(this,'profile')">
+      <i class="ti ti-user"></i>
+      Profile
+    </button>
+  </nav>
 
   <!-- Sidebar -->
   <aside class="sidebar">
@@ -753,8 +879,21 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
 <div class="modal-overlay hidden" id="upload-modal">
   <div class="modal">
     <div class="modal-title">
-      Post to BloxPulse
+      <span id="upload-modal-title">Post to BloxPulse</span>
       <button class="modal-close" onclick="closeUpload()"><i class="ti ti-x"></i></button>
+    </div>
+
+    <!-- Post type selector -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;">
+      <button id="post-type-regular" onclick="setPostMode('regular')" style="flex:1;padding:8px;background:#FF4D00;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:'Syne',sans-serif;font-weight:600;">
+        📸 Regular Post
+      </button>
+      <button id="post-type-short" onclick="setPostMode('short')" style="flex:1;padding:8px;background:#202020;color:#888;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:'Syne',sans-serif;font-weight:600;">
+        ⚡ Short (60s max)
+      </button>
+    </div>
+    <div id="short-warning" style="display:none;background:rgba(255,77,0,0.08);border:0.5px solid rgba(255,77,0,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:#FF4D00;margin-bottom:12px;">
+      ⚡ Shorts are vertical videos up to 60 seconds. They appear in the Shorts feed!
     </div>
 
     <!-- Upload Area -->
@@ -1363,6 +1502,8 @@ async function submitPost() {
   if (!title) return showUploadError('Title is required');
   if (!selectedFile) return showUploadError('Please select a video or image to upload');
 
+  const isShort = document.getElementById('post-type-short').style.background === 'rgb(255, 77, 0)';
+
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Uploading...';
@@ -1383,6 +1524,7 @@ async function submitPost() {
         mediaUrl: uploadedMediaUrl,
         thumbnailUrl: uploadedThumbnailUrl,
         isVideo: uploadedIsVideo,
+        isShort: isShort && uploadedIsVideo,
       }),
     });
     allPosts.unshift(data.post);
@@ -1606,6 +1748,43 @@ function checkAdminStatus() {
 }
 
 
+
+
+// ── Post Mode ─────────────────────────────────────────────────────────────────
+
+let currentPostMode = 'regular';
+
+function setPostMode(mode) {
+  currentPostMode = mode;
+  const regularBtn = document.getElementById('post-type-regular');
+  const shortBtn = document.getElementById('post-type-short');
+  const warning = document.getElementById('short-warning');
+  
+  if (mode === 'short') {
+    regularBtn.style.background = '#202020';
+    regularBtn.style.color = '#888';
+    shortBtn.style.background = '#FF4D00';
+    shortBtn.style.color = 'white';
+    warning.style.display = 'block';
+    document.getElementById('upload-modal-title').textContent = 'Post a Short';
+  } else {
+    regularBtn.style.background = '#FF4D00';
+    regularBtn.style.color = 'white';
+    shortBtn.style.background = '#202020';
+    shortBtn.style.color = '#888';
+    warning.style.display = 'none';
+    document.getElementById('upload-modal-title').textContent = 'Post to BloxPulse';
+  }
+}
+
+// ── Mobile Navigation ────────────────────────────────────────────────────────
+
+function mobileNav(el, page) {
+  document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('topbar-title').textContent = el.querySelector('span') ? el.querySelector('span').textContent : page;
+}
+
 // ── Shorts ───────────────────────────────────────────────────────────────────
 
 let shortsPosts = [];
@@ -1627,7 +1806,7 @@ async function loadShorts() {
   try {
     const data = await apiFetch('/posts');
     // Filter only video posts for shorts
-    shortsPosts = data.posts.filter(p => p.isVideo && p.mediaUrl);
+    shortsPosts = data.posts.filter(p => p.isVideo && p.mediaUrl && p.isShort);
     
     if (shortsPosts.length === 0) {
       document.getElementById('shorts-empty').style.display = 'flex';
