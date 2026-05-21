@@ -35,7 +35,10 @@ const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'bloxpulse-secret-change-in-production';
 const DB_PATH = path.join(__dirname, 'db.json');
 
-app.use(cors());
+app.use(cors({
+  origin: ['https://majestic-cobbler-73f14a.netlify.app', 'http://localhost:3001', 'http://127.0.0.1:5500'],
+  credentials: true,
+}));
 app.use(express.json());
 
 // ─── Database ────────────────────────────────────────────────────────────────
