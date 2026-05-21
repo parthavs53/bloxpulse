@@ -699,6 +699,7 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
     <div class="nav-label">Creator</div>
     <button class="nav-btn" onclick="setNav(this,'profile')"><i class="ti ti-user"></i> My Profile</button>
     <button class="nav-btn" onclick="setNav(this,'analytics')"><i class="ti ti-chart-bar"></i> Analytics</button>
+    <button class="nav-btn" onclick="openShorts()"><i class="ti ti-player-play"></i> Shorts</button>
     <button class="nav-btn" id="admin-nav-btn" style="display:none;" onclick="openAdminPanel()"><i class="ti ti-shield"></i> Admin Panel</button>
 
     <div class="sidebar-bottom">
@@ -849,11 +850,84 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
   </div>
 </div>
 
+<!-- ── Shorts Modal ── -->
+<div class="modal-overlay hidden" id="shorts-modal" style="background:#000;padding:0;align-items:stretch;">
+  <div style="position:relative;width:100%;height:100vh;display:flex;align-items:center;justify-content:center;background:#000;">
+    
+    <!-- Close button -->
+    <button onclick="closeShorts()" style="position:absolute;top:20px;left:20px;background:rgba(255,255,255,0.1);border:none;color:white;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center;">
+      <i class="ti ti-x"></i>
+    </button>
+
+    <!-- Shorts title -->
+    <div style="position:absolute;top:20px;left:50%;transform:translateX(-50%);color:white;font-family:'Syne',sans-serif;font-weight:700;font-size:16px;z-index:10;">
+      ⚡ Shorts
+    </div>
+
+    <!-- Upload short button -->
+    <button onclick="closeShorts();openUpload();" style="position:absolute;top:20px;right:20px;background:#FF4D00;border:none;color:white;border-radius:20px;padding:8px 16px;font-size:13px;cursor:pointer;z-index:10;font-family:'Syne',sans-serif;font-weight:600;">
+      + Short
+    </button>
+
+    <!-- Video container -->
+    <div id="shorts-container" style="position:relative;width:100%;max-width:400px;height:100vh;overflow:hidden;">
+      <div id="shorts-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;color:#888;">
+        <i class="ti ti-video-off" style="font-size:48px;margin-bottom:16px;opacity:0.3;"></i>
+        <p style="font-size:14px;">No shorts yet!</p>
+        <p style="font-size:12px;margin-top:8px;">Be the first to post a short</p>
+      </div>
+      <div id="shorts-feed" style="display:none;height:100vh;position:relative;">
+        <!-- Current short -->
+        <div id="current-short" style="height:100vh;position:relative;display:flex;align-items:center;justify-content:center;">
+          <video id="short-video" style="height:100vh;width:100%;object-fit:cover;" loop playsinline></video>
+          
+          <!-- Overlay info -->
+          <div style="position:absolute;bottom:80px;left:16px;right:70px;z-index:5;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <img id="short-avatar" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid white;" />
+              <span id="short-creator" style="color:white;font-weight:600;font-size:14px;font-family:'Syne',sans-serif;"></span>
+            </div>
+            <div id="short-title" style="color:white;font-size:13px;line-height:1.4;text-shadow:0 1px 3px rgba(0,0,0,0.8);"></div>
+          </div>
+
+          <!-- Right side actions -->
+          <div style="position:absolute;right:12px;bottom:100px;display:flex;flex-direction:column;align-items:center;gap:20px;z-index:5;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+              <button id="short-like-btn" onclick="likeCurrentShort()" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                <i class="ti ti-heart"></i>
+              </button>
+              <span id="short-like-count" style="color:white;font-size:12px;">0</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+              <button style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                <i class="ti ti-message-circle"></i>
+              </button>
+              <span style="color:white;font-size:12px;">0</span>
+            </div>
+            <button onclick="shareCurrentShort()" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+              <i class="ti ti-share"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation arrows -->
+    <button onclick="prevShort()" id="prev-short-btn" style="position:absolute;bottom:30px;left:50%;transform:translateX(-70px);background:rgba(255,255,255,0.15);border:none;color:white;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;display:none;align-items:center;justify-content:center;">
+      <i class="ti ti-chevron-up"></i>
+    </button>
+    <button onclick="nextShort()" id="next-short-btn" style="position:absolute;bottom:30px;left:50%;transform:translateX(26px);background:rgba(255,255,255,0.15);border:none;color:white;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;display:none;align-items:center;justify-content:center;">
+      <i class="ti ti-chevron-down"></i>
+    </button>
+
+  </div>
+</div>
+
 <!-- ── Toast ── -->
 <div class="toast" id="toast"></div>
 
 <script>
-const API = 'http://localhost:3001/api';
+const API = 'https://bloxpulse-production.up.railway.app/api';
 let currentUser = null;
 let currentTab = 'foryou';
 let allPosts = [];
@@ -1530,6 +1604,122 @@ function checkAdminStatus() {
     if (btn) btn.style.display = 'flex';
   }
 }
+
+
+// ── Shorts ───────────────────────────────────────────────────────────────────
+
+let shortsPosts = [];
+let currentShortIndex = 0;
+
+function openShorts() {
+  document.getElementById('shorts-modal').classList.remove('hidden');
+  loadShorts();
+}
+
+function closeShorts() {
+  document.getElementById('shorts-modal').classList.add('hidden');
+  const video = document.getElementById('short-video');
+  video.pause();
+  video.src = '';
+}
+
+async function loadShorts() {
+  try {
+    const data = await apiFetch('/posts');
+    // Filter only video posts for shorts
+    shortsPosts = data.posts.filter(p => p.isVideo && p.mediaUrl);
+    
+    if (shortsPosts.length === 0) {
+      document.getElementById('shorts-empty').style.display = 'flex';
+      document.getElementById('shorts-feed').style.display = 'none';
+      document.getElementById('prev-short-btn').style.display = 'none';
+      document.getElementById('next-short-btn').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('shorts-empty').style.display = 'none';
+    document.getElementById('shorts-feed').style.display = 'block';
+    currentShortIndex = 0;
+    showShort(0);
+
+    // Show nav buttons if more than 1 short
+    if (shortsPosts.length > 1) {
+      document.getElementById('next-short-btn').style.display = 'flex';
+    }
+  } catch (err) {
+    console.error('Failed to load shorts:', err);
+  }
+}
+
+function showShort(index) {
+  const post = shortsPosts[index];
+  if (!post) return;
+
+  const video = document.getElementById('short-video');
+  video.src = post.mediaUrl;
+  video.play();
+
+  document.getElementById('short-title').textContent = post.title;
+  document.getElementById('short-creator').textContent = post.author?.displayName || post.author?.username || 'Unknown';
+  document.getElementById('short-like-count').textContent = fmt(post.likes || 0);
+  
+  const likeBtn = document.getElementById('short-like-btn');
+  likeBtn.style.color = post.likedBy ? '#FF4D6D' : 'white';
+  likeBtn.querySelector('i').className = post.likedBy ? 'ti ti-heart-filled' : 'ti ti-heart';
+
+  const avatar = document.getElementById('short-avatar');
+  avatar.src = post.author?.avatarUrl || '';
+
+  // Update nav buttons
+  document.getElementById('prev-short-btn').style.display = index > 0 ? 'flex' : 'none';
+  document.getElementById('next-short-btn').style.display = index < shortsPosts.length - 1 ? 'flex' : 'none';
+}
+
+function nextShort() {
+  if (currentShortIndex < shortsPosts.length - 1) {
+    currentShortIndex++;
+    showShort(currentShortIndex);
+  }
+}
+
+function prevShort() {
+  if (currentShortIndex > 0) {
+    currentShortIndex--;
+    showShort(currentShortIndex);
+  }
+}
+
+async function likeCurrentShort() {
+  if (!currentUser) return showToast('Sign in to like!', 'error');
+  const post = shortsPosts[currentShortIndex];
+  if (!post) return;
+
+  try {
+    const data = await apiFetch(`/posts/${post.id}/like`, { method: 'POST' });
+    post.likedBy = data.liked;
+    post.likes = data.likes;
+    document.getElementById('short-like-count').textContent = fmt(data.likes);
+    const likeBtn = document.getElementById('short-like-btn');
+    likeBtn.style.color = data.liked ? '#FF4D6D' : 'white';
+    likeBtn.querySelector('i').className = data.liked ? 'ti ti-heart-filled' : 'ti ti-heart';
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function shareCurrentShort() {
+  const post = shortsPosts[currentShortIndex];
+  if (!post) return;
+  navigator.clipboard.writeText(post.mediaUrl).then(() => showToast('Link copied!', 'success'));
+}
+
+// Keyboard navigation for shorts
+document.addEventListener('keydown', (e) => {
+  if (document.getElementById('shorts-modal').classList.contains('hidden')) return;
+  if (e.key === 'ArrowDown') nextShort();
+  if (e.key === 'ArrowUp') prevShort();
+  if (e.key === 'Escape') closeShorts();
+});
 
 </script>
 </body>
