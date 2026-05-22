@@ -826,6 +826,8 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
     <button class="nav-btn" onclick="setNav(this,'profile')"><i class="ti ti-user"></i> My Profile</button>
     <button class="nav-btn" onclick="setNav(this,'analytics')"><i class="ti ti-chart-bar"></i> Analytics</button>
     <button class="nav-btn" onclick="openShorts()"><i class="ti ti-player-play"></i> Shorts</button>
+    <button class="nav-btn" onclick="openFriends()"><i class="ti ti-users"></i> Friends <span id="friend-req-badge" style="display:none;background:#FF4D00;color:white;border-radius:50%;padding:1px 5px;font-size:10px;margin-left:4px;">0</span></button>
+    <button class="nav-btn" onclick="openMessages()"><i class="ti ti-message-2"></i> Messages <span id="msg-badge" style="display:none;background:#FF4D00;color:white;border-radius:50%;padding:1px 5px;font-size:10px;margin-left:4px;">0</span></button>
     <button class="nav-btn" id="admin-nav-btn" style="display:none;" onclick="openAdminPanel()"><i class="ti ti-shield"></i> Admin Panel</button>
 
     <div class="sidebar-bottom">
@@ -1062,6 +1064,62 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
   </div>
 </div>
 
+<!-- ── Friends Modal ── -->
+<div class="modal-overlay hidden" id="friends-modal">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-title">
+      Friends
+      <button class="modal-close" onclick="document.getElementById('friends-modal').classList.add('hidden')"><i class="ti ti-x"></i></button>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button onclick="friendsTab('requests')" id="ftab-requests" style="flex:1;padding:8px;background:#FF4D00;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:'Syne',sans-serif;">Requests</button>
+      <button onclick="friendsTab('friends')" id="ftab-friends" style="flex:1;padding:8px;background:#202020;color:#888;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:'Syne',sans-serif;">My Friends</button>
+      <button onclick="friendsTab('find')" id="ftab-find" style="flex:1;padding:8px;background:#202020;color:#888;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:'Syne',sans-serif;">Find People</button>
+    </div>
+
+    <div id="friends-content" style="max-height:400px;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- ── Messages Modal ── -->
+<div class="modal-overlay hidden" id="messages-modal">
+  <div class="modal" style="max-width:500px;padding:0;overflow:hidden;">
+    
+    <!-- Inbox view -->
+    <div id="inbox-view">
+      <div style="padding:20px 24px 16px;border-bottom:0.5px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;">Messages</div>
+        <button onclick="document.getElementById('messages-modal').classList.add('hidden')" style="background:none;border:none;color:#888;cursor:pointer;font-size:20px;"><i class="ti ti-x"></i></button>
+      </div>
+      <div id="inbox-content" style="max-height:500px;overflow-y:auto;"></div>
+    </div>
+
+    <!-- Chat view -->
+    <div id="chat-view" style="display:none;flex-direction:column;height:580px;">
+      <div style="padding:14px 20px;border-bottom:0.5px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px;">
+        <button onclick="backToInbox()" style="background:none;border:none;color:#888;cursor:pointer;font-size:20px;"><i class="ti ti-arrow-left"></i></button>
+        <img id="chat-avatar" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" />
+        <div>
+          <div id="chat-name" style="font-size:14px;font-weight:600;color:#F0EDE8;"></div>
+          <div id="chat-handle" style="font-size:11px;color:#888;"></div>
+        </div>
+      </div>
+      
+      <div id="chat-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;max-height:440px;"></div>
+      
+      <div style="padding:12px 16px;border-top:0.5px solid rgba(255,255,255,0.08);display:flex;gap:8px;">
+        <input id="chat-input" type="text" placeholder="Message..." onkeydown="if(event.key==='Enter')sendMessage()" style="flex:1;background:#202020;border:0.5px solid rgba(255,255,255,0.1);border-radius:20px;padding:10px 16px;font-size:13px;color:#F0EDE8;outline:none;font-family:'DM Sans',sans-serif;" />
+        <button onclick="sendMessage()" style="background:#FF4D00;border:none;color:white;border-radius:50%;width:38px;height:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+          <i class="ti ti-send" style="font-size:16px;"></i>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- ── Toast ── -->
 <div class="toast" id="toast"></div>
 
@@ -1228,6 +1286,8 @@ function showApp() {
   updateSidebarUser();
   loadFeed();
   checkAdminStatus();
+  loadBadges();
+  setInterval(loadBadges, 10000);
 }
 
 function updateSidebarUser() {
@@ -1749,6 +1809,240 @@ function checkAdminStatus() {
 
 
 
+
+
+// ── Friends System ────────────────────────────────────────────────────────────
+
+let currentChatFriend = null;
+let chatPollInterval = null;
+
+async function openFriends() {
+  document.getElementById('friends-modal').classList.remove('hidden');
+  friendsTab('requests');
+  loadFriendRequestBadge();
+}
+
+function friendsTab(tab) {
+  ['requests','friends','find'].forEach(t => {
+    const btn = document.getElementById('ftab-' + t);
+    btn.style.background = t === tab ? '#FF4D00' : '#202020';
+    btn.style.color = t === tab ? 'white' : '#888';
+  });
+  loadFriendsContent(tab);
+}
+
+async function loadFriendsContent(tab) {
+  const content = document.getElementById('friends-content');
+  content.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">Loading...</p>';
+
+  try {
+    if (tab === 'requests') {
+      const data = await apiFetch('/friends/requests');
+      if (!data.requests.length) {
+        content.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">No pending friend requests!</p>';
+        return;
+      }
+      content.innerHTML = data.requests.map(r => `
+        <div style="display:flex;align-items:center;gap:10px;padding:12px;border-bottom:0.5px solid rgba(255,255,255,0.05);">
+          <img src="${r.from?.avatarUrl || ''}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#202020;" onerror="this.style.display='none'" />
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:500;color:#F0EDE8;">${r.from?.displayName || r.from?.username || 'Unknown'}</div>
+            <div style="font-size:11px;color:#888;">@${r.from?.username || ''}</div>
+          </div>
+          <button onclick="respondFriend('${r.id}','accept')" style="padding:6px 12px;background:rgba(16,185,129,0.15);color:#10B981;border:none;border-radius:6px;cursor:pointer;font-size:12px;">Accept</button>
+          <button onclick="respondFriend('${r.id}','decline')" style="padding:6px 12px;background:rgba(255,77,109,0.15);color:#FF4D6D;border:none;border-radius:6px;cursor:pointer;font-size:12px;">Decline</button>
+        </div>
+      `).join('');
+
+    } else if (tab === 'friends') {
+      const data = await apiFetch('/friends');
+      if (!data.friends.length) {
+        content.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">No friends yet! Find people to add.</p>';
+        return;
+      }
+      content.innerHTML = data.friends.map(f => `
+        <div style="display:flex;align-items:center;gap:10px;padding:12px;border-bottom:0.5px solid rgba(255,255,255,0.05);">
+          <img src="${f.avatarUrl || ''}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#202020;" onerror="this.style.display='none'" />
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:500;color:#F0EDE8;">${f.displayName || f.username || 'Unknown'}</div>
+            <div style="font-size:11px;color:#888;">@${f.username || ''}</div>
+          </div>
+          <button onclick="openChatWith('${f.id}','${f.displayName || f.username}','${f.avatarUrl || ''}','@${f.username}')" style="padding:6px 12px;background:rgba(255,77,0,0.15);color:#FF4D00;border:none;border-radius:6px;cursor:pointer;font-size:12px;">Message</button>
+        </div>
+      `).join('');
+
+    } else if (tab === 'find') {
+      const data = await apiFetch('/posts');
+      const users = [...new Map(data.posts.map(p => [p.author?.id, p.author])).values()].filter(u => u && u.id !== currentUser?.id);
+      if (!users.length) {
+        content.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">No users found yet!</p>';
+        return;
+      }
+      content.innerHTML = users.map(u => `
+        <div style="display:flex;align-items:center;gap:10px;padding:12px;border-bottom:0.5px solid rgba(255,255,255,0.05);">
+          <img src="${u.avatarUrl || ''}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#202020;" onerror="this.style.display='none'" />
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:500;color:#F0EDE8;">${u.displayName || u.username || 'Unknown'}</div>
+            <div style="font-size:11px;color:#888;">@${u.username || ''}</div>
+          </div>
+          <button onclick="sendFriendRequest('${u.id}')" style="padding:6px 12px;background:rgba(255,77,0,0.15);color:#FF4D00;border:none;border-radius:6px;cursor:pointer;font-size:12px;">Add Friend</button>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    content.innerHTML = `<p style="color:#FF4D6D;text-align:center;padding:20px;">${err.message}</p>`;
+  }
+}
+
+async function sendFriendRequest(userId) {
+  try {
+    await apiFetch(`/friends/request/${userId}`, { method: 'POST' });
+    showToast('Friend request sent!', 'success');
+    loadFriendsContent('find');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function respondFriend(requestId, action) {
+  try {
+    await apiFetch(`/friends/respond/${requestId}`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+    showToast(action === 'accept' ? 'Friend added!' : 'Request declined', 'success');
+    loadFriendsContent('requests');
+    loadFriendRequestBadge();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function loadFriendRequestBadge() {
+  try {
+    const data = await apiFetch('/friends/requests');
+    const badge = document.getElementById('friend-req-badge');
+    if (data.requests.length > 0) {
+      badge.textContent = data.requests.length;
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch {}
+}
+
+// ── Messages ─────────────────────────────────────────────────────────────────
+
+async function openMessages() {
+  document.getElementById('messages-modal').classList.remove('hidden');
+  document.getElementById('inbox-view').style.display = 'block';
+  document.getElementById('chat-view').style.display = 'none';
+  loadInbox();
+}
+
+async function loadInbox() {
+  const content = document.getElementById('inbox-content');
+  content.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">Loading...</p>';
+
+  try {
+    const data = await apiFetch('/messages');
+    if (!data.conversations.length) {
+      content.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">No messages yet! Start a conversation from Friends.</p>';
+      return;
+    }
+    content.innerHTML = data.conversations.map(c => `
+      <div onclick="openChatWith('${c.friend.id}','${c.friend.displayName || c.friend.username}','${c.friend.avatarUrl || ''}','@${c.friend.username}')" style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:0.5px solid rgba(255,255,255,0.05);cursor:pointer;">
+        <img src="${c.friend.avatarUrl || ''}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;background:#202020;flex-shrink:0;" onerror="this.style.display='none'" />
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:${c.unread ? '700' : '500'};color:#F0EDE8;">${c.friend.displayName || c.friend.username}</div>
+          <div style="font-size:12px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.lastMessage?.text || ''}</div>
+        </div>
+        ${c.unread ? `<div style="background:#FF4D00;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;display:flex;align-items:center;justify-content:center;">${c.unread}</div>` : ''}
+      </div>
+    `).join('');
+  } catch (err) {
+    content.innerHTML = `<p style="color:#FF4D6D;text-align:center;padding:20px;">${err.message}</p>`;
+  }
+}
+
+async function openChatWith(friendId, name, avatar, handle) {
+  currentChatFriend = friendId;
+  document.getElementById('friends-modal').classList.add('hidden');
+  document.getElementById('messages-modal').classList.remove('hidden');
+  document.getElementById('inbox-view').style.display = 'none';
+  document.getElementById('chat-view').style.display = 'flex';
+  document.getElementById('chat-name').textContent = name;
+  document.getElementById('chat-handle').textContent = handle;
+  document.getElementById('chat-avatar').src = avatar;
+  await loadMessages();
+  if (chatPollInterval) clearInterval(chatPollInterval);
+  chatPollInterval = setInterval(loadMessages, 3000);
+}
+
+function backToInbox() {
+  if (chatPollInterval) clearInterval(chatPollInterval);
+  currentChatFriend = null;
+  document.getElementById('inbox-view').style.display = 'block';
+  document.getElementById('chat-view').style.display = 'none';
+  loadInbox();
+}
+
+async function loadMessages() {
+  if (!currentChatFriend) return;
+  try {
+    const data = await apiFetch(`/messages/${currentChatFriend}`);
+    const container = document.getElementById('chat-messages');
+    const wasAtBottom = container.scrollHeight - container.scrollTop === container.clientHeight;
+    
+    container.innerHTML = data.messages.map(m => {
+      const isMe = m.fromId === currentUser?.id;
+      return `
+        <div style="display:flex;justify-content:${isMe ? 'flex-end' : 'flex-start'};">
+          <div style="max-width:70%;padding:8px 12px;border-radius:${isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px'};background:${isMe ? '#FF4D00' : '#202020'};color:white;font-size:13px;line-height:1.4;">
+            ${escHtml(m.text)}
+            <div style="font-size:10px;opacity:0.6;margin-top:2px;text-align:right;">${formatTime(m.createdAt)}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (wasAtBottom || data.messages.length < 10) {
+      container.scrollTop = container.scrollHeight;
+    }
+  } catch {}
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || !currentChatFriend) return;
+  input.value = '';
+
+  try {
+    await apiFetch(`/messages/${currentChatFriend}`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
+    await loadMessages();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// Load badges on startup
+async function loadBadges() {
+  try {
+    loadFriendRequestBadge();
+    const data = await apiFetch('/messages/unread/count');
+    const badge = document.getElementById('msg-badge');
+    if (data.count > 0) {
+      badge.textContent = data.count;
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch {}
+}
 
 // ── Post Mode ─────────────────────────────────────────────────────────────────
 
