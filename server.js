@@ -273,7 +273,7 @@ app.get('/api/posts', (req, res) => {
 });
 
 app.post('/api/posts', authMiddleware, (req, res) => {
-  const { title, description, youtubeUrl, thumbnailUrl, mediaUrl, isVideo, tags, type } = req.body;
+  const { title, description, youtubeUrl, thumbnailUrl, mediaUrl, isVideo, isShort, tags, type } = req.body;
   if (!title) return res.status(400).json({ error: 'Title is required' });
   const ytId = youtubeUrl ? youtubeUrl.match(/(?:v=|youtu\.be\/)([^&\s]+)/)?.[1] : null;
   const thumb = thumbnailUrl || (ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null);
@@ -281,7 +281,7 @@ app.post('/api/posts', authMiddleware, (req, res) => {
   const post = {
     id: generateId(), authorId: req.user.userId, title,
     description: description || '', youtubeUrl: youtubeUrl || null, thumbnailUrl: thumb,
-    mediaUrl: mediaUrl || null, isVideo: isVideo || false,
+    mediaUrl: mediaUrl || null, isVideo: isVideo || false, isShort: isShort || false,
     youtubeId: ytId || null, tags: tags || [], type: type || 'gameplay',
     createdAt: new Date().toISOString(),
   };
@@ -520,4 +520,222 @@ app.post('/api/posts/:id/report', authMiddleware, (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`BloxPulse backend running on http://localhost:${PORT}`);
+});
+
+// ─── Friend System ────────────────────────────────────────────────────────────
+
+// Send friend request
+app.post('/api/friends/request/:userId', authMiddleware, (req, res) => {
+  const db = readDB();
+  if (!db.friendRequests) db.friendRequests = [];
+  if (!db.friends) db.friends = [];
+
+  const fromId = req.user.userId;
+  const toId = req.params.userId;
+
+  if (fromId === toId) return res.status(400).json({ error: "Can't add yourself!" });
+
+  // Check if already friends
+  const alreadyFriends = db.friends.some(f =>
+    (f.user1 === fromId && f.user2 === toId) ||
+    (f.user1 === toId && f.user2 === fromId)
+  );
+  if (alreadyFriends) return res.status(409).json({ error: 'Already friends!' });
+
+  // Check if request already exists
+  const existing = db.friendRequests.find(r =>
+    r.fromId === fromId && r.toId === toId && r.status === 'pending'
+  );
+  if (existing) return res.status(409).json({ error: 'Friend request already sent!' });
+
+  db.friendRequests.push({
+    id: generateId(),
+    fromId,
+    toId,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  });
+  writeDB(db);
+  res.json({ success: true, message: 'Friend request sent!' });
+});
+
+// Get pending friend requests
+app.get('/api/friends/requests', authMiddleware, (req, res) => {
+  const db = readDB();
+  if (!db.friendRequests) db.friendRequests = [];
+
+  const requests = db.friendRequests
+    .filter(r => r.toId === req.user.userId && r.status === 'pending')
+    .map(r => ({
+      ...r,
+      from: (() => { const u = db.users.find(u => u.id === r.fromId) || {}; const { password: _, ...safe } = u; return safe; })()
+    }));
+
+  res.json({ requests });
+});
+
+// Accept/decline friend request
+app.post('/api/friends/respond/:requestId', authMiddleware, (req, res) => {
+  const { action } = req.body; // 'accept' or 'decline'
+  const db = readDB();
+  if (!db.friendRequests) db.friendRequests = [];
+  if (!db.friends) db.friends = [];
+
+  const request = db.friendRequests.find(r => r.id === req.params.requestId && r.toId === req.user.userId);
+  if (!request) return res.status(404).json({ error: 'Request not found' });
+
+  request.status = action === 'accept' ? 'accepted' : 'declined';
+
+  if (action === 'accept') {
+    db.friends.push({
+      id: generateId(),
+      user1: request.fromId,
+      user2: request.toId,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  writeDB(db);
+  res.json({ success: true, action });
+});
+
+// Get friends list
+app.get('/api/friends', authMiddleware, (req, res) => {
+  const db = readDB();
+  if (!db.friends) db.friends = [];
+
+  const userId = req.user.userId;
+  const friends = db.friends
+    .filter(f => f.user1 === userId || f.user2 === userId)
+    .map(f => {
+      const friendId = f.user1 === userId ? f.user2 : f.user1;
+      const u = db.users.find(u => u.id === friendId) || {};
+      const { password: _, ...safe } = u;
+      return { friendshipId: f.id, ...safe };
+    });
+
+  res.json({ friends });
+});
+
+// Remove friend
+app.delete('/api/friends/:friendshipId', authMiddleware, (req, res) => {
+  const db = readDB();
+  if (!db.friends) db.friends = [];
+
+  const idx = db.friends.findIndex(f =>
+    f.id === req.params.friendshipId &&
+    (f.user1 === req.user.userId || f.user2 === req.user.userId)
+  );
+
+  if (idx === -1) return res.status(404).json({ error: 'Friendship not found' });
+  db.friends.splice(idx, 1);
+  writeDB(db);
+  res.json({ success: true });
+});
+
+// ─── Direct Messages ──────────────────────────────────────────────────────────
+
+// Send a message
+app.post('/api/messages/:friendId', authMiddleware, (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'Message text required' });
+
+  const db = readDB();
+  if (!db.friends) db.friends = [];
+  if (!db.messages) db.messages = [];
+
+  const fromId = req.user.userId;
+  const toId = req.params.friendId;
+
+  // Check if friends
+  const areFriends = db.friends.some(f =>
+    (f.user1 === fromId && f.user2 === toId) ||
+    (f.user1 === toId && f.user2 === fromId)
+  );
+  if (!areFriends) return res.status(403).json({ error: 'You can only message friends!' });
+
+  const message = {
+    id: generateId(),
+    fromId,
+    toId,
+    text,
+    createdAt: new Date().toISOString(),
+    read: false,
+  };
+
+  db.messages.push(message);
+  writeDB(db);
+
+  const from = db.users.find(u => u.id === fromId) || {};
+  const { password: _, ...safeFrom } = from;
+  res.json({ message: { ...message, from: safeFrom } });
+});
+
+// Get conversation with a friend
+app.get('/api/messages/:friendId', authMiddleware, (req, res) => {
+  const db = readDB();
+  if (!db.messages) db.messages = [];
+
+  const userId = req.user.userId;
+  const friendId = req.params.friendId;
+
+  const messages = db.messages
+    .filter(m =>
+      (m.fromId === userId && m.toId === friendId) ||
+      (m.fromId === friendId && m.toId === userId)
+    )
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+  // Mark as read
+  messages.forEach(m => {
+    if (m.toId === userId) m.read = true;
+  });
+  writeDB(db);
+
+  res.json({ messages });
+});
+
+// Get all conversations (inbox)
+app.get('/api/messages', authMiddleware, (req, res) => {
+  const db = readDB();
+  if (!db.messages) db.messages = [];
+  if (!db.friends) db.friends = [];
+
+  const userId = req.user.userId;
+
+  // Get all friends
+  const friends = db.friends
+    .filter(f => f.user1 === userId || f.user2 === userId)
+    .map(f => {
+      const friendId = f.user1 === userId ? f.user2 : f.user1;
+      const u = db.users.find(u => u.id === friendId) || {};
+      const { password: _, ...safe } = u;
+
+      // Get last message
+      const convo = db.messages
+        .filter(m =>
+          (m.fromId === userId && m.toId === friendId) ||
+          (m.fromId === friendId && m.toId === userId)
+        )
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      const unread = convo.filter(m => m.toId === userId && !m.read).length;
+
+      return {
+        friend: safe,
+        lastMessage: convo[0] || null,
+        unread,
+      };
+    })
+    .filter(c => c.lastMessage); // Only show conversations with messages
+
+  res.json({ conversations: friends });
+});
+
+// Get unread message count
+app.get('/api/messages/unread/count', authMiddleware, (req, res) => {
+  const db = readDB();
+  if (!db.messages) db.messages = [];
+  const count = db.messages.filter(m => m.toId === req.user.userId && !m.read).length;
+  res.json({ count });
 });
