@@ -42,12 +42,21 @@ app.use(express.json());
 
 function readDB() {
   if (!fs.existsSync(DB_PATH)) {
-    const init = { users: [], posts: [], likes: [], follows: [], comments: [], pendingVerifications: [] };
+    const init = {
+      users: [], posts: [], likes: [], follows: [], comments: [],
+      pendingVerifications: [], friendRequests: [], friends: [],
+      messages: [], reports: []
+    };
     fs.writeFileSync(DB_PATH, JSON.stringify(init, null, 2));
     return init;
   }
   const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+  // Ensure all collections exist (backwards compat)
   if (!db.pendingVerifications) db.pendingVerifications = [];
+  if (!db.friendRequests) db.friendRequests = [];
+  if (!db.friends) db.friends = [];
+  if (!db.messages) db.messages = [];
+  if (!db.reports) db.reports = [];
   return db;
 }
 
@@ -516,12 +525,6 @@ app.post('/api/posts/:id/report', authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
-// ─── Start ───────────────────────────────────────────────────────────────────
-
-app.listen(PORT, () => {
-  console.log(`BloxPulse backend running on http://localhost:${PORT}`);
-});
-
 // ─── Friend System ────────────────────────────────────────────────────────────
 
 // Send friend request
@@ -738,4 +741,10 @@ app.get('/api/messages/unread/count', authMiddleware, (req, res) => {
   if (!db.messages) db.messages = [];
   const count = db.messages.filter(m => m.toId === req.user.userId && !m.read).length;
   res.json({ count });
+});
+
+// ─── Start ───────────────────────────────────────────────────────────────────
+
+app.listen(PORT, () => {
+  console.log(`BloxPulse backend running on http://localhost:${PORT}`);
 });
