@@ -176,6 +176,7 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
   padding: 24px 14px;
   gap: 4px;
   overflow-y: auto;
+  height: 100vh;
 }
 
 .sidebar-logo {
@@ -795,10 +796,6 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
       <i class="ti ti-layout-dashboard"></i>
       Feed
     </button>
-    <button class="mobile-nav-btn" onclick="mobileNav(this,'explore')">
-      <i class="ti ti-compass"></i>
-      Explore
-    </button>
     <button class="mobile-nav-btn" onclick="openUpload()">
       <i class="ti ti-circle-plus"></i>
       Post
@@ -807,9 +804,15 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
       <i class="ti ti-player-play"></i>
       Shorts
     </button>
-    <button class="mobile-nav-btn" onclick="mobileNav(this,'profile')">
-      <i class="ti ti-user"></i>
-      Profile
+    <button class="mobile-nav-btn" onclick="openFriends()" style="position:relative;">
+      <i class="ti ti-users"></i>
+      Friends
+      <span id="mobile-friend-badge" style="display:none;position:absolute;top:2px;right:8px;background:#FF4D00;color:white;border-radius:50%;padding:1px 5px;font-size:9px;">0</span>
+    </button>
+    <button class="mobile-nav-btn" onclick="openMessages()" style="position:relative;">
+      <i class="ti ti-message-2"></i>
+      Messages
+      <span id="mobile-msg-badge" style="display:none;position:absolute;top:2px;right:8px;background:#FF4D00;color:white;border-radius:50%;padding:1px 5px;font-size:9px;">0</span>
     </button>
   </nav>
 
@@ -821,13 +824,13 @@ body { background: var(--dark); color: var(--text); font-family: var(--font-body
     <button class="nav-btn" onclick="setNav(this,'explore')"><i class="ti ti-compass"></i> Explore</button>
     <button class="nav-btn" onclick="setNav(this,'notifs')"><i class="ti ti-bell"></i> Notifications</button>
     <button class="nav-btn" onclick="setNav(this,'saved')"><i class="ti ti-bookmark"></i> Saved</button>
+    <button class="nav-btn" onclick="openFriends()"><i class="ti ti-users"></i> Friends <span id="friend-req-badge" style="display:none;background:#FF4D00;color:white;border-radius:50%;padding:1px 5px;font-size:10px;margin-left:4px;">0</span></button>
+    <button class="nav-btn" onclick="openMessages()"><i class="ti ti-message-2"></i> Messages <span id="msg-badge" style="display:none;background:#FF4D00;color:white;border-radius:50%;padding:1px 5px;font-size:10px;margin-left:4px;">0</span></button>
 
     <div class="nav-label">Creator</div>
     <button class="nav-btn" onclick="setNav(this,'profile')"><i class="ti ti-user"></i> My Profile</button>
     <button class="nav-btn" onclick="setNav(this,'analytics')"><i class="ti ti-chart-bar"></i> Analytics</button>
     <button class="nav-btn" onclick="openShorts()"><i class="ti ti-player-play"></i> Shorts</button>
-    <button class="nav-btn" onclick="openFriends()"><i class="ti ti-users"></i> Friends <span id="friend-req-badge" style="display:none;background:#FF4D00;color:white;border-radius:50%;padding:1px 5px;font-size:10px;margin-left:4px;">0</span></button>
-    <button class="nav-btn" onclick="openMessages()"><i class="ti ti-message-2"></i> Messages <span id="msg-badge" style="display:none;background:#FF4D00;color:white;border-radius:50%;padding:1px 5px;font-size:10px;margin-left:4px;">0</span></button>
     <button class="nav-btn" id="admin-nav-btn" style="display:none;" onclick="openAdminPanel()"><i class="ti ti-shield"></i> Admin Panel</button>
 
     <div class="sidebar-bottom">
@@ -1922,11 +1925,15 @@ async function loadFriendRequestBadge() {
   try {
     const data = await apiFetch('/friends/requests');
     const badge = document.getElementById('friend-req-badge');
+    const mobileBadge = document.getElementById('mobile-friend-badge');
     if (data.requests.length > 0) {
       badge.textContent = data.requests.length;
       badge.style.display = 'inline';
+      mobileBadge.textContent = data.requests.length;
+      mobileBadge.style.display = 'inline';
     } else {
       badge.style.display = 'none';
+      mobileBadge.style.display = 'none';
     }
   } catch {}
 }
@@ -2035,11 +2042,15 @@ async function loadBadges() {
     loadFriendRequestBadge();
     const data = await apiFetch('/messages/unread/count');
     const badge = document.getElementById('msg-badge');
+    const mobileBadge = document.getElementById('mobile-msg-badge');
     if (data.count > 0) {
       badge.textContent = data.count;
       badge.style.display = 'inline';
+      mobileBadge.textContent = data.count;
+      mobileBadge.style.display = 'inline';
     } else {
       badge.style.display = 'none';
+      mobileBadge.style.display = 'none';
     }
   } catch {}
 }
